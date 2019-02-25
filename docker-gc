@@ -117,7 +117,10 @@ function compute_exclude_ids() {
     # grep for them below, it will effectively be: "match either repo:tag
     # or imageid".  Also delete blank lines or lines that only contain
     # whitespace
-    sed 's/^\(.*\)$/ \1 /' $EXCLUDE_FROM_GC | sed '/^ *$/d' > $PROCESSED_EXCLUDES
+    #sed 's/^\(.*\)$/ \1 /' $EXCLUDE_FROM_GC | sed '/^ *$/d' > $PROCESSED_EXCLUDES
+
+    cp $EXCLUDE_FROM_GC $PROCESSED_EXCLUDES
+ 
     # The following looks a bit of a mess, but here's what it does:
     # 1. Get images
     # 2. Skip header line
@@ -126,14 +129,17 @@ function compute_exclude_ids() {
     # 5. Grab the image id from the line
     # 6. Prepend ^ to the beginning of each line
 
+    echo "========================================================="
+    echo "Excluding the following images from file [$EXCLUDE_FROM_GC]"
+    cat  $PROCESSED_EXCLUDES
+    echo "========================================================="
+
     # What this does is make grep patterns to match image ids mentioned by
     # either repo:tag or image id for later greppage
-    $DOCKER images \
-        | tail -n+2 \
-        | sed 's/^\([^ ]*\) *\([^ ]*\) *\([^ ]*\).*/ \1:\2 \3 /' \
-        | grep -f $PROCESSED_EXCLUDES 2>/dev/null \
-        | cut -d' ' -f3 \
-        | sed 's/^/^(sha256:)?/' > $EXCLUDE_IDS_FILE
+    $DOCKER images --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+         | grep -f $PROCESSED_EXCLUDES 2>/dev/null \
+         | cut -d' ' -f2 \
+         | sed 's/^/^(sha256:)?/' > $EXCLUDE_IDS_FILE
 }
 
 function compute_exclude_container_ids() {
@@ -205,6 +211,12 @@ cd "$STATE_DIR"
 
 # Verify that docker is reachable
 $DOCKER version 1>/dev/null
+
+if [[ $DRY_RUN -gt 0 ]]; then
+  echo "=========================================================="
+  echo " DRY RUN IS ENABLED. NOTHING WILL BE REMOVED."
+  echo "=========================================================="
+fi
 
 # List all currently existing containers
 $DOCKER ps -a -q --no-trunc | sort | uniq > containers.all
